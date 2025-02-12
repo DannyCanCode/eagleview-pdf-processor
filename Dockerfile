@@ -14,5 +14,5 @@ COPY . .
 # Expose the port (this is just documentation)
 EXPOSE 8000
 
-# Command to run the application using Railway's PORT environment variable
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} 
+# Command to run the application
+CMD python -c "import os; import subprocess; port = int(os.environ.get('PORT', '8000')); subprocess.run(['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', str(port)])" 
