@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Expose port 8000
+# Expose port (this is just documentation)
 EXPOSE 8000
 
-# Command to run the application
-CMD ["python", "-m", "main"] 
+# Command to run the application using shell form to ensure environment variables are expanded
+CMD python -m main 
