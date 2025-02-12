@@ -5,6 +5,7 @@ import time
 from pdf_processor.extractor import create_extractor
 from pdf_processor.models import ProcessingResponse
 import os
+import uvicorn
 
 # Initialize FastAPI app
 app = FastAPI(title="EagleView PDF Processor")
@@ -110,11 +111,20 @@ async def test_pdf(file: UploadFile):
             "filename": file.filename
         }
 
-if __name__ == "__main__":
-    import uvicorn
-    # Get port from environment variable with fallback to 8000
+def start_server():
+    """Start the uvicorn server with proper port handling."""
     try:
         port = int(os.environ.get("PORT", "8000"))
     except ValueError:
+        print(f"Invalid PORT value: {os.environ.get('PORT')}. Using default port 8000.")
         port = 8000
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        log_level="info"
+    )
+
+if __name__ == "__main__":
+    start_server() 
