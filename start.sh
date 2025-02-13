@@ -1,13 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e  # Exit on error
 
-# Use PORT from environment or default to 8000
+# Use Railway's $PORT if available; otherwise fall back to 8000
 PORT="${PORT:-8000}"
 
-# Start gunicorn with uvicorn workers
+# Start Gunicorn with Uvicorn workers
 exec gunicorn main:app \
-    --bind "0.0.0.0:$PORT" \
     --worker-class uvicorn.workers.UvicornWorker \
-    --workers 1 \
-    --timeout 300 \
-    --access-logfile - \
-    --error-logfile - 
+    --bind 0.0.0.0:"$PORT" \
+    --workers 2 
