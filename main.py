@@ -4,6 +4,7 @@ import fitz
 import time
 from pdf_processor.extractor import create_extractor
 from pdf_processor.models import ProcessingResponse
+from pdf_processor.storage import AzureBlobStorage
 import os
 
 # Initialize FastAPI app
@@ -18,8 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize PDF extractor
+# Initialize PDF extractor and Azure storage
 pdf_extractor = create_extractor()
+azure_storage = AzureBlobStorage()
 
 @app.get("/")
 async def health_check():
@@ -30,7 +32,6 @@ async def health_check():
 async def process_pdf(
     file: UploadFile,
     report_id: str = None,
-    file_url: str = None,
 ) -> ProcessingResponse:
     """Process an EagleView PDF report and extract measurements."""
     if not file.filename.lower().endswith('.pdf'):
@@ -41,12 +42,11 @@ async def process_pdf(
         if not report_id:
             report_id = f"report_{int(time.time())}"
             
-        # Use filename as file_url if not provided
-        if not file_url:
-            file_url = file.filename
-            
         # Read file contents
         contents = await file.read()
+        
+        # Upload file to Azure Blob Storage
+        file_url = await azure_storage.upload_pdf(contents, f"{report_id}.pdf")
         
         # Extract measurements and address
         measurements = await pdf_extractor.process_pdf(contents)
@@ -70,7 +70,7 @@ async def process_pdf(
         error_response = ProcessingResponse(
             status="error",
             report_id=report_id or "error",
-            file_url=file_url or file.filename,
+            file_url="",
             file_name=file.filename,
             measurements={},
             error=str(e)
@@ -85,11 +85,17 @@ async def test_pdf(file: UploadFile):
     
     try:
         contents = await file.read()
+        
+        # Upload file to Azure Blob Storage for testing
+        file_url = await azure_storage.upload_pdf(contents, f"test_{file.filename}")
+        
+        # Process the PDF
         result = await pdf_extractor.process_pdf(contents)
         
         return {
             "success": True,
             "filename": file.filename,
+            "file_url": file_url,
             "measurements": result,
             "patterns_used": list(pdf_extractor.patterns.keys())
         }

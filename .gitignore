@@ -36,4 +36,12 @@ ENV/
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Test files
+test.pdf
+test_*.py
+*_test.py
+
+# Logs
+*.log 

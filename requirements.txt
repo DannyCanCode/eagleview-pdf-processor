@@ -3,6 +3,12 @@ uvicorn==0.27.1
 python-multipart==0.0.9
 PyMuPDF==1.23.26
 pydantic==2.6.1
+pydantic-settings==2.1.0
 python-dotenv==1.0.1
 gunicorn==21.2.0
 httpx==0.26.0
+azure-storage-blob==12.19.0
+azure-identity==1.15.0
+azure-keyvault-secrets==4.7.0
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.27
