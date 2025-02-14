@@ -12,4 +12,11 @@ setup(
         "pydantic",
         "pydantic-settings"
     ],
+    extras_require={
+        'test': [
+            'pytest',
+            'pytest-env',
+            'pytest-cov'
+        ]
+    }
 ) 
