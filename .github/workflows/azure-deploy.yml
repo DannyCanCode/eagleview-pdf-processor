@@ -43,7 +43,12 @@ jobs:
         echo "\nTest discovery:"
         python -c "import pytest; print(pytest.main(['--collect-only', '-v', 'tests/']))"
 
-    - name: Run Tests
+    - name: Run Simple Test
+      run: |
+        # First run the simple test to verify pytest works
+        python -m pytest tests/test_simple.py -v
+
+    - name: Run All Tests
       env:
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         AZURE_STORAGE_CONTAINER_NAME: pdf-files
@@ -54,8 +59,8 @@ jobs:
         POSTGRES_PORT: "5432"
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        # Try running a specific test file
-        python -m pytest tests/test_azure_services.py -v
+        # Run all tests with environment variables set
+        python -m pytest tests/ -v
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
