@@ -22,12 +22,11 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Create virtual environment and install dependencies
+    - name: Install dependencies
       run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install -r requirements.txt
+        python -m pip install --upgrade pip
         pip install pytest
+        pip install -r requirements.txt
 
     - name: Run Tests
       env:
@@ -39,7 +38,7 @@ jobs:
         POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         POSTGRES_PORT: "5432"
       run: |
-        python -m pytest tests/
+        pytest tests/
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
