@@ -44,4 +44,7 @@ test_*.py
 *_test.py
 
 # Logs
-*.log 
+*.log
+
+# Azure publish profile
+publish_profile.xml 
