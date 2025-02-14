@@ -45,13 +45,13 @@ jobs:
 
     - name: Run Tests
       env:
-        azure_storage_connection_string: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-        azure_storage_container_name: pdf-files
-        postgres_user: ${{ secrets.POSTGRES_USER }}
-        postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
-        postgres_host: ${{ secrets.POSTGRES_HOST }}
-        postgres_db: ${{ secrets.POSTGRES_DB }}
-        postgres_port: "5432"
+        AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        AZURE_STORAGE_CONTAINER_NAME: pdf-files
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        POSTGRES_PORT: "5432"
         PYTHONPATH: ${{ github.workspace }}
       run: |
         echo "Running pytest from:"
@@ -59,9 +59,9 @@ jobs:
         echo "\nWith Python path:"
         echo $PYTHONPATH
         echo "\nAttempting to run test:"
-        python -m pytest --collect-only -v
-        echo "\nTrying to run specific test:"
-        find . -name "test_simple.py" -exec python -m pytest {} -v \;
+        python -m pytest -v
+        echo "\nEnvironment variables:"
+        env | grep -E "POSTGRES_|AZURE_"
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2

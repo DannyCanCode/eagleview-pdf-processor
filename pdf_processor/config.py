@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     """Application settings with environment validation."""
     
     # Azure PostgreSQL configuration
-    postgres_host: str
     postgres_user: str
     postgres_password: str
+    postgres_host: str
     postgres_db: str
     postgres_port: str = "5432"
     
@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        # Map environment variables to field names
+        fields = {
+            'postgres_user': {'env': ['postgres_user', 'POSTGRES_USER']},
+            'postgres_password': {'env': ['postgres_password', 'POSTGRES_PASSWORD']},
+            'postgres_host': {'env': ['postgres_host', 'POSTGRES_HOST']},
+            'postgres_db': {'env': ['postgres_db', 'POSTGRES_DB']},
+            'postgres_port': {'env': ['postgres_port', 'POSTGRES_PORT']},
+            'azure_storage_connection_string': {'env': ['azure_storage_connection_string', 'AZURE_STORAGE_CONNECTION_STRING']},
+            'azure_storage_container_name': {'env': ['azure_storage_container_name', 'AZURE_STORAGE_CONTAINER_NAME']},
+        }
 
 @lru_cache()
 def get_settings() -> Settings:
