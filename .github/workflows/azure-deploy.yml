@@ -32,7 +32,7 @@ jobs:
     - name: Run Tests
       env:
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-        AZURE_STORAGE_CONTAINER: pdf-files
+        AZURE_STORAGE_CONTAINER_NAME: pdf-files
         POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
         POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
