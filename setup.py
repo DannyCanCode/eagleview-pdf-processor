@@ -16,7 +16,9 @@ setup(
         'test': [
             'pytest',
             'pytest-env',
-            'pytest-cov'
+            'pytest-cov',
+            'pytest-asyncio'
         ]
-    }
+    },
+    python_requires='>=3.11',
 ) 
