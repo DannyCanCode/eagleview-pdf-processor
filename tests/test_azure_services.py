@@ -44,6 +44,9 @@ def test_database_connection():
         pytest.skip("Database credentials not configured")
     
     db = Database()
-    with db.get_session() as session:
+    session = next(db.get_session())
+    try:
         result = session.execute("SELECT 1")
-        assert result.scalar() == 1 
+        assert result.scalar() == 1
+    finally:
+        session.close() 
