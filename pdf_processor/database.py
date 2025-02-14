@@ -7,7 +7,7 @@ from .config import get_settings
 settings = get_settings()
 
 # Create PostgreSQL connection URL
-DATABASE_URL = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+DATABASE_URL = f"postgresql://{settings.postgres_user}:{settings.postgres_password}@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 
 # Create SQLAlchemy engine
 engine = create_engine(DATABASE_URL)

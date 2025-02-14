@@ -2,27 +2,29 @@ import os
 import pytest
 from pdf_processor.storage import AzureBlobStorage
 from pdf_processor.database import Database
-from pdf_processor.config import settings
+from pdf_processor.config import get_settings
 
 @pytest.mark.env
 def test_environment_variables():
     """Test that all required environment variables are set"""
+    settings = get_settings()
     required_vars = [
-        'AZURE_STORAGE_CONNECTION_STRING',
-        'AZURE_STORAGE_CONTAINER_NAME',
-        'POSTGRES_USER',
-        'POSTGRES_PASSWORD',
-        'POSTGRES_HOST',
-        'POSTGRES_DB'
+        'azure_storage_connection_string',
+        'azure_storage_container_name',
+        'postgres_user',
+        'postgres_password',
+        'postgres_host',
+        'postgres_db'
     ]
     
     for var in required_vars:
-        assert os.getenv(var) is not None, f"Missing environment variable: {var}"
+        assert hasattr(settings, var), f"Missing setting: {var}"
 
 @pytest.mark.storage
 def test_azure_blob_storage_connection():
     """Test Azure Blob Storage connection"""
-    if not os.getenv('AZURE_STORAGE_CONNECTION_STRING'):
+    settings = get_settings()
+    if not settings.azure_storage_connection_string:
         pytest.skip("Azure storage connection string not configured")
     
     storage = AzureBlobStorage()
@@ -32,11 +34,12 @@ def test_azure_blob_storage_connection():
 @pytest.mark.db
 def test_database_connection():
     """Test PostgreSQL database connection"""
+    settings = get_settings()
     if not all([
-        os.getenv('POSTGRES_USER'),
-        os.getenv('POSTGRES_PASSWORD'),
-        os.getenv('POSTGRES_HOST'),
-        os.getenv('POSTGRES_DB')
+        settings.postgres_user,
+        settings.postgres_password,
+        settings.postgres_host,
+        settings.postgres_db
     ]):
         pytest.skip("Database credentials not configured")
     
