@@ -3,13 +3,14 @@ from azure.core.exceptions import ResourceExistsError
 import os
 from typing import Optional, BinaryIO
 from datetime import datetime, timedelta
-from .config import settings
+from .config import get_settings
 import logging
 
 logger = logging.getLogger(__name__)
 
 class AzureBlobStorage:
     def __init__(self):
+        settings = get_settings()
         self.connection_string = settings.azure_storage_connection_string
         self.container_name = settings.azure_storage_container_name
         self.blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
@@ -25,6 +26,10 @@ class AzureBlobStorage:
         except Exception as e:
             logger.error(f"Error ensuring container exists: {str(e)}")
             raise
+
+    def get_container_client(self):
+        """Get the container client for testing."""
+        return self.blob_service_client.get_container_client(self.container_name)
 
     async def upload_pdf(self, file: BinaryIO, filename: str) -> str:
         """

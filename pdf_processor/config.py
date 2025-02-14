@@ -27,8 +27,10 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
 
-# Create settings instance
-settings = Settings()
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
 
-# Export settings
-__all__ = ['settings'] 
+# Export settings and getter
+__all__ = ['get_settings'] 
