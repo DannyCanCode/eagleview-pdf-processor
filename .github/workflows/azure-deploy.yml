@@ -26,7 +26,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[test]"
+        pip install pytest pytest-env pytest-cov
+        pip install azure-storage-blob sqlalchemy psycopg2-binary python-dotenv pydantic pydantic-settings
         pip install -r requirements.txt
 
     - name: Debug Environment
@@ -39,8 +40,8 @@ jobs:
         ls -la tests/
         echo "\nPython path:"
         echo $PYTHONPATH
-        echo "\nInstalled packages:"
-        pip list
+        echo "\nTest discovery:"
+        python -c "import pytest; print(pytest.main(['--collect-only', '-v', 'tests/']))"
 
     - name: Run Tests
       env:
@@ -53,7 +54,8 @@ jobs:
         POSTGRES_PORT: "5432"
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        python -m pytest tests/ -v --no-cov --collect-only -s
+        # Try running a specific test file
+        python -m pytest tests/test_azure_services.py -v
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
