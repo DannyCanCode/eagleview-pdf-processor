@@ -1,5 +1,6 @@
 import os
 import pytest
+from sqlalchemy import text
 from pdf_processor.storage import AzureBlobStorage
 from pdf_processor.database import Database
 from pdf_processor.config import get_settings
@@ -46,7 +47,7 @@ def test_database_connection():
     db = Database()
     session = db.get_test_session()
     try:
-        result = session.execute("SELECT 1")
+        result = session.execute(text("SELECT 1"))
         assert result.scalar() == 1
     finally:
         session.close() 
