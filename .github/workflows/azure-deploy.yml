@@ -27,18 +27,19 @@ jobs:
         python -m venv venv
         source venv/bin/activate
         pip install -r requirements.txt
+        pip install pytest
 
     - name: Run Tests
       env:
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-        AZURE_STORAGE_CONTAINER: ${{ secrets.AZURE_STORAGE_CONTAINER }}
+        AZURE_STORAGE_CONTAINER_NAME: pdf-files
         POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
         POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
         POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        POSTGRES_PORT: "5432"
       run: |
-        python -m pytest test_upload.py
-        python test_db_connection.py
+        python -m pytest tests/
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
