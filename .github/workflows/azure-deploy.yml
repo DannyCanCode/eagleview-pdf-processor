@@ -18,6 +18,19 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Debug Repository State
+      run: |
+        echo "Current location:"
+        pwd
+        echo "\nRepository contents:"
+        ls -la
+        echo "\nFull directory tree:"
+        find . -type f
+        echo "\nTests directory specific:"
+        ls -la tests/
+        echo "\nTest file contents:"
+        cat tests/test_simple.py
+
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
@@ -30,25 +43,7 @@ jobs:
         pip install azure-storage-blob sqlalchemy psycopg2-binary python-dotenv pydantic pydantic-settings
         pip install -r requirements.txt
 
-    - name: Debug Environment
-      run: |
-        echo "Current directory:"
-        pwd
-        echo "\nDirectory contents:"
-        ls -la
-        echo "\nTests directory contents:"
-        ls -la tests/
-        echo "\nPython path:"
-        echo $PYTHONPATH
-        echo "\nTest discovery:"
-        python -c "import pytest; print(pytest.main(['--collect-only', '-v', 'tests/']))"
-
-    - name: Run Simple Test
-      run: |
-        # First run the simple test to verify pytest works
-        python -m pytest tests/test_simple.py -v
-
-    - name: Run All Tests
+    - name: Run Tests
       env:
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         AZURE_STORAGE_CONTAINER_NAME: pdf-files
@@ -59,8 +54,14 @@ jobs:
         POSTGRES_PORT: "5432"
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        # Run all tests with environment variables set
-        python -m pytest tests/ -v
+        echo "Running pytest from:"
+        pwd
+        echo "\nWith Python path:"
+        echo $PYTHONPATH
+        echo "\nAttempting to run test:"
+        python -m pytest --collect-only -v
+        echo "\nTrying to run specific test:"
+        find . -name "test_simple.py" -exec python -m pytest {} -v \;
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
