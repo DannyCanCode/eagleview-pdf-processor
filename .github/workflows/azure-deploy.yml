@@ -1,6 +1,7 @@
 name: Deploy to Azure
 
 # Workflow for deploying Python app to Azure
+# Trigger deployment on push to main branch or manual workflow dispatch
 on:
   push:
     branches:
@@ -8,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: pdf-processor-app
+  AZURE_WEBAPP_NAME: pdf-processor-app  # Matches the app name in Azure portal
   PYTHON_VERSION: '3.11'
   POSTGRES_USER: postgres
   POSTGRES_PASSWORD: postgres
