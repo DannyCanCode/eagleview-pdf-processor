@@ -3,7 +3,7 @@ from azure.core.exceptions import ResourceExistsError
 import os
 from typing import Optional, BinaryIO
 from datetime import datetime, timedelta
-from .config import get_settings
+from pdf_processor.config import get_settings
 import logging
 
 logger = logging.getLogger(__name__)
