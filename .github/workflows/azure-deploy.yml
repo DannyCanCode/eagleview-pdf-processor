@@ -1,5 +1,6 @@
 name: Deploy to Azure
 
+# Workflow for deploying Python app to Azure
 on:
   push:
     branches:
