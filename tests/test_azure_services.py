@@ -4,21 +4,21 @@ from pdf_processor.storage import AzureBlobStorage
 from pdf_processor.database import Database
 from pdf_processor.config import get_settings
 
-@pytest.mark.env
-def test_environment_variables():
-    """Test that all required environment variables are set"""
+def test_settings_loaded():
+    """Test that settings are loaded correctly"""
     settings = get_settings()
-    required_vars = [
-        'azure_storage_connection_string',
-        'azure_storage_container_name',
-        'postgres_user',
-        'postgres_password',
-        'postgres_host',
-        'postgres_db'
-    ]
+    print("\nSettings values (excluding passwords):")
+    for field in settings.model_fields:
+        value = getattr(settings, field)
+        if 'password' not in field.lower():
+            print(f"{field} = {value}")
     
-    for var in required_vars:
-        assert hasattr(settings, var), f"Missing setting: {var}"
+    # Test required settings are present
+    assert settings.postgres_user, "postgres_user not set"
+    assert settings.postgres_password, "postgres_password not set"
+    assert settings.postgres_host, "postgres_host not set"
+    assert settings.postgres_db, "postgres_db not set"
+    assert settings.azure_storage_connection_string, "azure_storage_connection_string not set"
 
 @pytest.mark.storage
 def test_azure_blob_storage_connection():

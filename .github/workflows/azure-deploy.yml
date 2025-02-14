@@ -54,14 +54,16 @@ jobs:
         POSTGRES_PORT: "5432"
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        echo "Running pytest from:"
-        pwd
-        echo "\nWith Python path:"
-        echo $PYTHONPATH
-        echo "\nAttempting to run test:"
-        python -m pytest -v
-        echo "\nEnvironment variables:"
-        env | grep -E "POSTGRES_|AZURE_"
+        echo "Environment setup:"
+        python -c "
+        import os
+        print('\nEnvironment variables:')
+        for k, v in os.environ.items():
+            if any(x in k for x in ['POSTGRES_', 'AZURE_']):
+                print(f'{k}={v if not k.endswith(\"PASSWORD\") else \"***\"}')
+        "
+        echo "\nRunning tests:"
+        python -m pytest -v --tb=short
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
