@@ -29,6 +29,19 @@ jobs:
         pip install -e ".[test]"
         pip install -r requirements.txt
 
+    - name: Debug Environment
+      run: |
+        echo "Current directory:"
+        pwd
+        echo "\nDirectory contents:"
+        ls -la
+        echo "\nTests directory contents:"
+        ls -la tests/
+        echo "\nPython path:"
+        echo $PYTHONPATH
+        echo "\nInstalled packages:"
+        pip list
+
     - name: Run Tests
       env:
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
@@ -40,7 +53,7 @@ jobs:
         POSTGRES_PORT: "5432"
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        python -m pytest tests/ -v --no-cov
+        python -m pytest tests/ -v --no-cov --collect-only -s
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
