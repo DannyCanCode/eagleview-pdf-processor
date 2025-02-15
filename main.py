@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import fitz
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pdf_processor.extractor import create_extractor
 from pdf_processor.models import ProcessingResponse
 from pdf_processor.storage import AzureBlobStorage
@@ -59,6 +59,42 @@ async def get_report(report_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+
+@app.get("/reports")
+async def list_reports():
+    """List all reports, with optional cleanup of old files."""
+    try:
+        # Get all blobs from the container
+        container_client = azure_storage.get_container_client()
+        blobs = list(container_client.list_blobs())
+        
+        # Sort blobs by creation time (newest first)
+        blobs.sort(key=lambda x: x.creation_time, reverse=True)
+        
+        # Keep only last 20 files, delete others
+        if len(blobs) > 20:
+            for blob in blobs[20:]:
+                container_client.delete_blob(blob.name)
+        
+        # Return only the most recent 20 reports
+        reports = []
+        for blob in blobs[:20]:
+            # Extract report_id from blob name
+            report_id = blob.name.split('.')[0]
+            if '_' in report_id:
+                report_id = report_id.split('_')[-1]
+            
+            reports.append({
+                "id": report_id,
+                "status": "completed",
+                "file_url": f"https://pdfprocessor3mg.blob.core.windows.net/pdf-files/{blob.name}",
+                "created_at": blob.creation_time.isoformat(),
+                "file_name": blob.name
+            })
+        
+        return reports
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/process-pdf")
 async def process_pdf(
