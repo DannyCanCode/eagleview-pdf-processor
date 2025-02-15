@@ -2,9 +2,11 @@ from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import fitz
 import time
+from datetime import datetime
 from pdf_processor.extractor import create_extractor
 from pdf_processor.models import ProcessingResponse
 from pdf_processor.storage import AzureBlobStorage
+from pdf_processor.database import Database
 import os
 
 # Initialize FastAPI app
@@ -19,14 +21,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize PDF extractor and Azure storage
+# Initialize services
 pdf_extractor = create_extractor()
 azure_storage = AzureBlobStorage()
+db = Database()
 
 @app.get("/")
-async def health_check():
-    """Health check endpoint."""
+async def root():
+    """Root endpoint."""
     return {"status": "healthy", "service": "eagleview-pdf-processor"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint that frontend expects."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "eagleview-pdf-processor"
+    }
+
+@app.get("/reports/{report_id}")
+async def get_report(report_id: str):
+    """Get report details by ID."""
+    try:
+        # Here you would typically fetch from database
+        # For now, return a mock response matching frontend expectations
+        return {
+            "id": report_id,
+            "status": "completed",
+            "measurements": {
+                "length": "25.5",
+                "width": "30.2",
+                "area": "770.1"
+            },
+            "file_url": f"https://pdfprocessor3mg.blob.core.windows.net/pdf-files/{report_id}.pdf",
+            "created_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
 
 @app.post("/process-pdf")
 async def process_pdf(
