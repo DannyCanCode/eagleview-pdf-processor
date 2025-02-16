@@ -115,73 +115,70 @@ class PDFMeasurementExtractor:
         }
 
     def _parse_areas_per_pitch(self, text: str, blocks: List) -> Dict[str, Dict[str, float]]:
-        """Parse the Areas per Pitch section using block structure."""
+        """Parse the Areas per Pitch section from EagleView PDFs."""
         areas_per_pitch = {}
         
-        # First find the section header block
-        header_found = False
-        table_blocks = []
+        # First find the section in the text
+        section_pattern = r'Areas\s+per\s+Pitch.*?\n(.*?)(?=\n\s*\n|\Z)'
+        section_match = re.search(section_pattern, text, re.DOTALL)
         
-        for block in blocks:
-            block_text = block[4]  # Text content is at index 4
-            logger.info(f"Processing block: {block_text}")
-            
-            if 'Areas per Pitch' in block_text:
-                header_found = True
-                logger.info("Found Areas per Pitch header")
-                continue
-                
-            if header_found and ('Structure Complexity' in block_text or 'Waste Calculation' in block_text):
-                break
-                
-            if header_found:
-                table_blocks.append(block_text)
-        
-        if not table_blocks:
-            logger.warning("No table blocks found after Areas per Pitch header")
+        if not section_match:
+            logger.warning("Could not find Areas per Pitch section")
             return areas_per_pitch
             
-        logger.info(f"Found table blocks: {table_blocks}")
+        section_text = section_match.group(1)
+        logger.info(f"Found Areas per Pitch section:\n{section_text}")
         
-        # Find the blocks containing pitches, areas, and percentages
-        pitches = []
-        areas = []
-        percentages = []
+        # Split into lines and clean them
+        lines = [line.strip() for line in section_text.split('\n') if line.strip()]
+        logger.info(f"Processing lines: {lines}")
         
-        for block in table_blocks:
-            # Split block into lines
-            lines = block.strip().split('\n')
+        current_pitch = None
+        current_area = None
+        
+        for line in lines:
+            logger.info(f"Processing line: {line}")
             
-            # Check each line
-            for line in lines:
-                if re.match(r'\d+/\d+', line):
-                    pitches.extend(re.findall(r'\d+/\d+', line))
-                elif re.match(r'\d+(?:,\d*)?\.?\d*$', line):
-                    areas.append(self._clean_value(line))
-                elif re.match(r'\d+\.?\d*%', line):
-                    percentages.append(float(line.rstrip('%')))
+            # First check for pitch (contains '/')
+            if '/' in line:
+                current_pitch = line.strip()
+                logger.info(f"Found pitch: {current_pitch}")
+                continue
+            
+            # Then check for percentage (ends with '%')
+            if line.endswith('%'):
+                if current_pitch and current_area is not None:
+                    try:
+                        percentage = float(line.rstrip('%'))
+                        areas_per_pitch[current_pitch] = {
+                            'area': current_area,
+                            'percentage': percentage
+                        }
+                        logger.info(f"Added pitch data: {current_pitch} -> area={current_area}, percentage={percentage}%")
+                        current_pitch = None
+                        current_area = None
+                    except ValueError:
+                        logger.warning(f"Could not parse percentage value: {line}")
+                continue
+            
+            # Finally try as area (numeric)
+            try:
+                current_area = float(line.replace(',', ''))
+                logger.info(f"Found area: {current_area}")
+            except ValueError:
+                logger.warning(f"Could not parse area value: {line}")
         
-        logger.info(f"Found pitches: {pitches}")
-        logger.info(f"Found areas: {areas}")
-        logger.info(f"Found percentages: {percentages}")
-        
-        # Combine the data
-        for i in range(min(len(pitches), len(areas), len(percentages))):
-            areas_per_pitch[pitches[i]] = {
-                'area': areas[i],
-                'percentage': percentages[i]
-            }
-            logger.info(f"Added pitch data: {pitches[i]} -> area={areas[i]}, percentage={percentages[i]}%")
-        
-        # Validate the data
+        # Validate total percentage
         if areas_per_pitch:
             total_percentage = sum(data['percentage'] for data in areas_per_pitch.values())
             total_area = sum(data['area'] for data in areas_per_pitch.values())
-            logger.info(f"Total percentage: {total_percentage}%, Total area: {total_area}")
+            logger.info(f"Total percentage: {total_percentage}%")
+            logger.info(f"Total area: {total_area}")
             
             if not (99.0 <= total_percentage <= 101.0):
                 logger.warning(f"Total percentage {total_percentage}% is not approximately 100%")
         
+        logger.info(f"Final areas_per_pitch data: {areas_per_pitch}")
         return areas_per_pitch
 
     def _parse_suggested_waste(self, text: str) -> Optional[Dict[str, float]]:
