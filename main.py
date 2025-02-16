@@ -199,5 +199,48 @@ async def test_pdf(file: UploadFile):
             "filename": file.filename
         }
 
+@app.get("/reports")
+async def list_reports():
+    """List all reports."""
+    try:
+        # Get all PDF files from the container
+        container_client = azure_storage.get_container_client()
+        blobs = container_client.list_blobs()
+        
+        # Filter for PDF files and get their corresponding JSON data
+        reports = []
+        for blob in blobs:
+            if blob.name.endswith('.pdf'):
+                report_id = blob.name.replace('.pdf', '')
+                try:
+                    # Try to get the JSON data for this report
+                    json_data = await azure_storage.get_json_data(f"{report_id}.json")
+                    if json_data:
+                        reports.append({
+                            "id": report_id,
+                            "filename": json_data.get("filename"),
+                            "created_at": blob.creation_time.isoformat(),
+                            "measurements": json_data.get("measurements", {}),
+                            "total_area": json_data.get("total_area"),
+                            "address_info": json_data.get("address_info", {})
+                        })
+                except:
+                    # If JSON not found, add basic info
+                    reports.append({
+                        "id": report_id,
+                        "filename": blob.name,
+                        "created_at": blob.creation_time.isoformat()
+                    })
+        
+        # Sort by creation time, newest first
+        reports.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        return {
+            "success": True,
+            "reports": reports
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing reports: {str(e)}")
+
 # Note: We don't need the if __name__ == "__main__" block anymore
 # as we're using Gunicorn/Uvicorn for deployment 
