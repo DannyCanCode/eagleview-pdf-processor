@@ -201,7 +201,8 @@ async def test_pdf(file: UploadFile):
 
 @app.get("/reports")
 async def list_reports():
-    """List all reports."""
+    """List all reports with their measurements and metadata.
+    Returns a list of all processed PDF reports with their extracted data."""
     try:
         # Get all PDF files from the container
         container_client = azure_storage.get_container_client()
