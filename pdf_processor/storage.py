@@ -1,7 +1,8 @@
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from azure.core.exceptions import ResourceExistsError
 import os
-from typing import Optional, BinaryIO
+import json
+from typing import Optional, BinaryIO, Dict, Any
 from datetime import datetime, timedelta
 from pdf_processor.config import get_settings
 import logging
@@ -144,4 +145,61 @@ class AzureBlobStorage:
             
         except Exception as e:
             logger.error(f"Error generating SAS URL for {blob_name}: {str(e)}")
+            return None
+
+    async def store_json_data(self, blob_name: str, data: Dict[str, Any]) -> bool:
+        """
+        Store JSON data in Azure Blob Storage.
+        
+        Args:
+            blob_name: The name of the blob
+            data: Dictionary to store as JSON
+            
+        Returns:
+            bool: True if storage was successful, False otherwise
+        """
+        try:
+            # Convert data to JSON string
+            json_str = json.dumps(data)
+            
+            # Get the blob client
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name,
+                blob=blob_name
+            )
+            
+            # Upload the JSON data
+            blob_client.upload_blob(json_str, overwrite=True)
+            logger.info(f"Successfully stored JSON data in {blob_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error storing JSON data in {blob_name}: {str(e)}")
+            return False
+
+    async def get_json_data(self, blob_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve JSON data from Azure Blob Storage.
+        
+        Args:
+            blob_name: The name of the blob to retrieve
+            
+        Returns:
+            Optional[Dict[str, Any]]: The JSON data if found, None otherwise
+        """
+        try:
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name,
+                blob=blob_name
+            )
+            
+            # Download the blob
+            blob_data = blob_client.download_blob()
+            json_str = await blob_data.content_as_text()
+            
+            # Parse JSON
+            return json.loads(json_str)
+            
+        except Exception as e:
+            logger.error(f"Error retrieving JSON data from {blob_name}: {str(e)}")
             return None 

@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import fitz
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pdf_processor.extractor import create_extractor
 from pdf_processor.models import ProcessingResponse
 from pdf_processor.storage import AzureBlobStorage
@@ -44,57 +44,37 @@ async def health_check():
 async def get_report(report_id: str):
     """Get report details by ID."""
     try:
-        # Here you would typically fetch from database
-        # For now, return a mock response matching frontend expectations
-        return {
-            "id": report_id,
-            "status": "completed",
-            "measurements": {
-                "length": "25.5",
-                "width": "30.2",
-                "area": "770.1"
-            },
-            "file_url": f"https://pdfprocessor3mg.blob.core.windows.net/pdf-files/{report_id}.pdf",
-            "created_at": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
-
-@app.get("/reports")
-async def list_reports():
-    """List all reports, with optional cleanup of old files."""
-    try:
-        # Get all blobs from the container
-        container_client = azure_storage.get_container_client()
-        blobs = list(container_client.list_blobs())
-        
-        # Sort blobs by creation time (newest first)
-        blobs.sort(key=lambda x: x.creation_time, reverse=True)
-        
-        # Keep only last 20 files, delete others
-        if len(blobs) > 20:
-            for blob in blobs[20:]:
-                container_client.delete_blob(blob.name)
-        
-        # Return only the most recent 20 reports
-        reports = []
-        for blob in blobs[:20]:
-            # Extract report_id from blob name
-            report_id = blob.name.split('.')[0]
-            if '_' in report_id:
-                report_id = report_id.split('_')[-1]
+        # Get the report data from Azure Blob Storage
+        blob_name = f"{report_id}.json"
+        try:
+            report_data = await azure_storage.get_json_data(blob_name)
+            if not report_data:
+                raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+        except Exception as e:
+            # If JSON not found, try to get from PDF processing
+            pdf_blob_name = f"{report_id}.pdf"
+            pdf_data = await azure_storage.get_pdf(pdf_blob_name)
+            if not pdf_data:
+                raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
             
-            reports.append({
+            # Process PDF and extract measurements
+            measurements = await pdf_extractor.process_pdf(pdf_data)
+            
+            # Store the measurements for future requests
+            report_data = {
                 "id": report_id,
                 "status": "completed",
-                "file_url": f"https://pdfprocessor3mg.blob.core.windows.net/pdf-files/{blob.name}",
-                "created_at": blob.creation_time.isoformat(),
-                "file_name": blob.name
-            })
-        
-        return reports
+                "measurements": measurements,
+                "file_url": f"https://pdfprocessor3mg.blob.core.windows.net/pdf-files/{report_id}.pdf",
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await azure_storage.store_json_data(blob_name, report_data)
+
+        return report_data
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error retrieving report: {str(e)}")
 
 @app.post("/process-pdf")
 async def process_pdf(
@@ -118,6 +98,17 @@ async def process_pdf(
         
         # Extract measurements and address
         measurements = await pdf_extractor.process_pdf(contents)
+        
+        # Store the full report data in JSON format
+        report_data = {
+            "id": report_id,
+            "status": "completed",
+            "measurements": measurements,
+            "file_url": file_url,
+            "file_name": file.filename,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        await azure_storage.store_json_data(f"{report_id}.json", report_data)
         
         # Create response object with measurements and address info
         response = ProcessingResponse(
