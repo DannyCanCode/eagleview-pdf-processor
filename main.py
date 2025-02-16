@@ -114,12 +114,15 @@ async def process_pdf(
         if not report_id:
             timestamp = int(time.time())
             report_id = f"report_{timestamp}"
-            
+        
+        print(f"Processing report with ID: {report_id}")
+        
         # Read file contents
         contents = await file.read()
         
-        # Upload file to Azure Blob Storage with consistent naming
+        # Upload file to Azure Blob Storage with report ID as name
         pdf_blob_name = f"{report_id}.pdf"
+        print(f"Uploading PDF as: {pdf_blob_name}")
         file_url = await azure_storage.upload_pdf(contents, pdf_blob_name)
         
         # Extract measurements and address
@@ -158,8 +161,9 @@ async def process_pdf(
             ]
         }
         
-        # Store the full data for future retrieval with consistent naming
+        # Store the full data for future retrieval
         json_blob_name = f"{report_id}.json"
+        print(f"Storing JSON data as: {json_blob_name}")
         await azure_storage.store_json_data(json_blob_name, response_data)
         
         return ProcessingResponse(**response_data)
