@@ -209,13 +209,20 @@ async def list_reports():
     try:
         # Get all PDF files from the container
         container_client = azure_storage.get_container_client()
-        blobs = list(container_client.list_blobs())
         
-        print(f"Found {len(blobs)} blobs in container")
+        # List all blobs in the container
+        print("Listing all blobs in container...")
+        all_blobs = []
+        blob_list = container_client.list_blobs()
+        for blob in blob_list:
+            print(f"Found blob: {blob.name}")
+            all_blobs.append(blob)
+        
+        print(f"Found total {len(all_blobs)} blobs")
         
         # Filter for PDF files and get their corresponding JSON data
         reports = []
-        for blob in blobs:
+        for blob in all_blobs:
             print(f"Processing blob: {blob.name}")
             if blob.name.endswith('.pdf'):
                 report_id = blob.name.replace('.pdf', '')
@@ -235,9 +242,13 @@ async def list_reports():
                         })
                     else:
                         print(f"No JSON data found for report {report_id}")
+                        reports.append({
+                            "id": report_id,
+                            "filename": blob.name,
+                            "created_at": blob.creation_time.isoformat()
+                        })
                 except Exception as e:
                     print(f"Error processing JSON for report {report_id}: {str(e)}")
-                    # If JSON not found, add basic info
                     reports.append({
                         "id": report_id,
                         "filename": blob.name,
