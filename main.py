@@ -62,11 +62,35 @@ async def get_report(report_id: str):
             
             # Store the measurements for future requests
             report_data = {
-                "id": report_id,
-                "status": "completed",
-                "measurements": measurements,
-                "file_url": f"https://pdfprocessor3mg.blob.core.windows.net/pdf-files/{report_id}.pdf",
-                "created_at": datetime.utcnow().isoformat()
+                "success": True,
+                "filename": pdf_blob_name,
+                "measurements": {
+                    "predominant_pitch": measurements.get("predominant_pitch"),
+                    "penetrations_area": measurements.get("penetrations_area"),
+                    "penetrations_perimeter": measurements.get("penetrations_perimeter"),
+                    "total_area": measurements.get("total_area"),
+                    "ridges": measurements.get("ridges"),
+                    "valleys": measurements.get("valleys"),
+                    "eaves": measurements.get("eaves"),
+                    "rakes": measurements.get("rakes"),
+                    "hips": measurements.get("hips"),
+                    "step_flashing": measurements.get("step_flashing"),
+                    "flashing": measurements.get("flashing"),
+                    "drip_edge": measurements.get("drip_edge")
+                },
+                "areas_per_pitch": measurements.get("areas_per_pitch", {}),
+                "address_info": {
+                    "street_address": measurements.get("street_address"),
+                    "city": measurements.get("city"),
+                    "state": measurements.get("state"),
+                    "zip_code": measurements.get("zip_code")
+                },
+                "total_area": measurements.get("total_area", {}).get("value"),
+                "patterns_used": [
+                    "total_area", "predominant_pitch", "ridges", "valleys",
+                    "eaves", "rakes", "hips", "step_flashing", "flashing",
+                    "penetrations_area", "penetrations_perimeter", "drip_edge"
+                ]
             }
             await azure_storage.store_json_data(blob_name, report_data)
 
@@ -99,38 +123,48 @@ async def process_pdf(
         # Extract measurements and address
         measurements = await pdf_extractor.process_pdf(contents)
         
-        # Store the full report data in JSON format
-        report_data = {
-            "id": report_id,
-            "status": "completed",
-            "measurements": measurements,
-            "file_url": file_url,
-            "file_name": file.filename,
-            "created_at": datetime.utcnow().isoformat()
+        # Create the response in the exact format needed
+        response_data = {
+            "success": True,
+            "filename": file.filename,
+            "measurements": {
+                "predominant_pitch": measurements.get("predominant_pitch"),
+                "penetrations_area": measurements.get("penetrations_area"),
+                "penetrations_perimeter": measurements.get("penetrations_perimeter"),
+                "total_area": measurements.get("total_area"),
+                "ridges": measurements.get("ridges"),
+                "valleys": measurements.get("valleys"),
+                "eaves": measurements.get("eaves"),
+                "rakes": measurements.get("rakes"),
+                "hips": measurements.get("hips"),
+                "step_flashing": measurements.get("step_flashing"),
+                "flashing": measurements.get("flashing"),
+                "drip_edge": measurements.get("drip_edge")
+            },
+            "areas_per_pitch": measurements.get("areas_per_pitch", {}),
+            "address_info": {
+                "street_address": measurements.get("street_address"),
+                "city": measurements.get("city"),
+                "state": measurements.get("state"),
+                "zip_code": measurements.get("zip_code")
+            },
+            "total_area": measurements.get("total_area", {}).get("value"),
+            "patterns_used": [
+                "total_area", "predominant_pitch", "ridges", "valleys",
+                "eaves", "rakes", "hips", "step_flashing", "flashing",
+                "penetrations_area", "penetrations_perimeter", "drip_edge"
+            ]
         }
-        await azure_storage.store_json_data(f"{report_id}.json", report_data)
         
-        # Create response object with measurements and address info
-        response = ProcessingResponse(
-            status="success",
-            report_id=report_id,
-            file_url=file_url,
-            file_name=file.filename,
-            measurements=measurements,
-            street_address=measurements.get('street_address'),
-            city=measurements.get('city'),
-            state=measurements.get('state'),
-            zip_code=measurements.get('zip_code')
-        )
+        # Store the full data for future retrieval
+        await azure_storage.store_json_data(f"{report_id}.json", response_data)
         
-        return response
+        return ProcessingResponse(**response_data)
         
     except Exception as e:
         error_response = ProcessingResponse(
-            status="error",
-            report_id=report_id or "error",
-            file_url="",
-            file_name=file.filename,
+            success=False,
+            filename=file.filename,
             measurements={},
             error=str(e)
         )
