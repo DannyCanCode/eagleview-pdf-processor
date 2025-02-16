@@ -112,13 +112,15 @@ async def process_pdf(
     try:
         # Generate report_id if not provided
         if not report_id:
-            report_id = f"report_{int(time.time())}"
+            timestamp = int(time.time())
+            report_id = f"report_{timestamp}"
             
         # Read file contents
         contents = await file.read()
         
-        # Upload file to Azure Blob Storage
-        file_url = await azure_storage.upload_pdf(contents, f"{report_id}.pdf")
+        # Upload file to Azure Blob Storage with consistent naming
+        pdf_blob_name = f"{report_id}.pdf"
+        file_url = await azure_storage.upload_pdf(contents, pdf_blob_name)
         
         # Extract measurements and address
         measurements = await pdf_extractor.process_pdf(contents)
@@ -156,8 +158,9 @@ async def process_pdf(
             ]
         }
         
-        # Store the full data for future retrieval
-        await azure_storage.store_json_data(f"{report_id}.json", response_data)
+        # Store the full data for future retrieval with consistent naming
+        json_blob_name = f"{report_id}.json"
+        await azure_storage.store_json_data(json_blob_name, response_data)
         
         return ProcessingResponse(**response_data)
         
