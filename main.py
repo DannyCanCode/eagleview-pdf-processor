@@ -209,17 +209,22 @@ async def list_reports():
     try:
         # Get all PDF files from the container
         container_client = azure_storage.get_container_client()
-        blobs = container_client.list_blobs()
+        blobs = list(container_client.list_blobs())
+        
+        print(f"Found {len(blobs)} blobs in container")
         
         # Filter for PDF files and get their corresponding JSON data
         reports = []
         for blob in blobs:
+            print(f"Processing blob: {blob.name}")
             if blob.name.endswith('.pdf'):
                 report_id = blob.name.replace('.pdf', '')
+                print(f"Found PDF file with report_id: {report_id}")
                 try:
                     # Try to get the JSON data for this report
                     json_data = await azure_storage.get_json_data(f"{report_id}.json")
                     if json_data:
+                        print(f"Found JSON data for report {report_id}")
                         reports.append({
                             "id": report_id,
                             "filename": json_data.get("filename"),
@@ -228,7 +233,10 @@ async def list_reports():
                             "total_area": json_data.get("total_area"),
                             "address_info": json_data.get("address_info", {})
                         })
-                except:
+                    else:
+                        print(f"No JSON data found for report {report_id}")
+                except Exception as e:
+                    print(f"Error processing JSON for report {report_id}: {str(e)}")
                     # If JSON not found, add basic info
                     reports.append({
                         "id": report_id,
@@ -239,11 +247,13 @@ async def list_reports():
         # Sort by creation time, newest first
         reports.sort(key=lambda x: x["created_at"], reverse=True)
         
+        print(f"Returning {len(reports)} reports")
         return {
             "success": True,
             "reports": reports
         }
     except Exception as e:
+        print(f"Error listing reports: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing reports: {str(e)}")
 
 # Note: We don't need the if __name__ == "__main__" block anymore
