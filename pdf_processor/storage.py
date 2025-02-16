@@ -44,14 +44,10 @@ class AzureBlobStorage:
             str: The URL of the uploaded file
         """
         try:
-            # Create a unique filename with timestamp
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            blob_name = f"{timestamp}_{filename}"
-            
             # Get the blob client
             blob_client = self.blob_service_client.get_blob_client(
                 container=self.container_name,
-                blob=blob_name
+                blob=filename
             )
             
             # Upload the file
@@ -60,11 +56,11 @@ class AzureBlobStorage:
             # Get the blob URL
             blob_url = blob_client.url
             
-            logger.info(f"Successfully uploaded file {blob_name}")
+            print(f"Successfully uploaded file {filename}")
             return blob_url
             
         except Exception as e:
-            logger.error(f"Error uploading file {filename}: {str(e)}")
+            print(f"Error uploading file {filename}: {str(e)}")
             raise
 
     async def get_pdf(self, blob_name: str) -> Optional[bytes]:
