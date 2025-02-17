@@ -2,6 +2,7 @@ import re
 import logging
 from typing import Dict, List, Optional, Tuple, Union
 import fitz  # PyMuPDF
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,27 +25,30 @@ class PDFMeasurementExtractor:
     """Extracts measurements from roofing PDF reports."""
     
     def __init__(self):
-        # Define all measurement patterns
+        # Define all measurement patterns exactly as specified
         self.patterns = {
-            'total_area': re.compile(r'Total\s+Area\s*\(All\s+Pitches\)\s*=\s*(\d+,?\d*)\s*sq\s*ft', re.IGNORECASE),
+            'total_area': re.compile(r'Total\s+Roof\s+Area\s*=\s*(\d+,?\d*)\s*sq\s*ft', re.IGNORECASE),
             'predominant_pitch': re.compile(r'Predominant\s+Pitch\s*=\s*(\d+/\d+)', re.IGNORECASE),
-            'ridges': re.compile(r'(?:Total\s+)?Ridges\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Ridges?\)', re.IGNORECASE),
-            'valleys': re.compile(r'(?:Total\s+)?Valleys\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Valleys?\)', re.IGNORECASE),
-            'eaves': re.compile(r'(?:Total\s+)?Eaves(?:/Starter)?[‡†]?\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Eaves?\)', re.IGNORECASE),
-            'rakes': re.compile(r'(?:Total\s+)?Rakes[†]?\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Rakes?\)', re.IGNORECASE),
-            'hips': re.compile(r'(?:Total\s+)?Hips\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Hips?\)\.?', re.IGNORECASE),
-            'step_flashing': re.compile(r'(?:Total\s+)?Step\s+flashing\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Lengths?\)', re.IGNORECASE),
-            'flashing': re.compile(r'(?:^|\n)\s*Flashing\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Lengths?\)', re.IGNORECASE),
+            'ridges': re.compile(r'(?:Total\s+)?Ridges\s*=\s*(\d+)\s*ft\s*\(\d+\s*Ridges?\)', re.IGNORECASE),
+            'valleys': re.compile(r'(?:Total\s+)?Valleys\s*=\s*(\d+)\s*ft', re.IGNORECASE),
+            'eaves': re.compile(r'(?:Total\s+)?Eaves(?:/Starter)?[‡†]?\s*=\s*(\d+)\s*ft', re.IGNORECASE),
+            'rakes': re.compile(r'(?:Total\s+)?Rakes[†]?\s*=\s*(\d+)\s*ft', re.IGNORECASE),
+            'hips': re.compile(r'(?:Total\s+)?Hips\s*=\s*(\d+)\s*ft\s*\(\d+\s*Hips?\)\.?', re.IGNORECASE),
+            'flashing': re.compile(r'(?:Total\s+)?Flashing\s*=\s*(\d+)\s*ft', re.IGNORECASE),
+            'step_flashing': re.compile(r'(?:Total\s+)?Step\s+flashing\s*=\s*(\d+)\s*ft', re.IGNORECASE),
             'penetrations_area': re.compile(r'Total\s+Penetrations\s+Area\s*=\s*(\d+)\s*sq\s*ft', re.IGNORECASE),
             'penetrations_perimeter': re.compile(r'Total\s+Penetrations\s+Perimeter\s*=\s*(\d+)\s*ft', re.IGNORECASE),
-            'drip_edge': re.compile(r'Drip\s+Edge\s*\(Eaves\s*\+\s*Rakes\)\s*=\s*(\d+)\s*ft\s*\((\d+)\s*Lengths?\)', re.IGNORECASE),
         }
         # Add address pattern
         self.address_pattern = re.compile(r'([^,]+),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)')
 
     def _clean_value(self, value: str) -> float:
         """Clean and convert measurement value to float."""
-        return float(value.replace(',', '').replace(' ', ''))
+        try:
+            return float(value.replace(',', '').replace(' ', ''))
+        except ValueError as e:
+            logger.error(f"Error converting value {value} to float: {e}")
+            raise ValueError(f"Invalid numeric value: {value}")
 
     def _extract_count(self, text: str, feature: str) -> Optional[int]:
         """Extract count of features (e.g., number of ridges)."""
@@ -268,12 +272,26 @@ class PDFMeasurementExtractor:
     async def process_pdf(self, pdf_content: bytes) -> Dict[str, Union[RoofingMeasurement, Dict]]:
         """Process PDF content and extract all measurements."""
         try:
-            measurements = {}
+            # Initialize measurements with required structure
+            measurements = {
+                "measurements": {
+                    "total_area": None,
+                    "predominant_pitch": None,
+                    "ridges": None,
+                    "valleys": None,
+                    "eaves": None,
+                    "rakes": None,
+                    "hips": None,
+                    "flashing": None,
+                    "step_flashing": None,
+                    "penetrations_area": None,
+                    "penetrations_perimeter": None
+                },
+                "areas_per_pitch": {}
+            }
             
             with fitz.open(stream=pdf_content, filetype="pdf") as doc:
                 text, blocks = await self.extract_text(doc)
-                page_num = 1  # Default to page 1 for now
-                
                 logger.info("Starting measurement extraction")
                 
                 # Extract address from first page
@@ -288,7 +306,7 @@ class PDFMeasurementExtractor:
                 
                 # Extract standard measurements
                 for measure_type, pattern in self.patterns.items():
-                    found_measurements = self._find_all_measurements(pattern, text, page_num, measure_type)
+                    found_measurements = self._find_all_measurements(pattern, text, 1, measure_type)
                     if found_measurements:
                         logger.info(f"Found {measure_type}: {found_measurements}")
                     else:
@@ -297,19 +315,12 @@ class PDFMeasurementExtractor:
                     if found_measurements:
                         if measure_type == 'predominant_pitch':
                             m = found_measurements[0]
-                            measurements[measure_type] = RoofingMeasurement(
-                                m['value'],
-                                'ratio'
-                            )
+                            measurements['measurements'][measure_type] = m['value']
                         else:
                             consolidated = self._consolidate_measurements(found_measurements)
                             if consolidated:
                                 unit = 'sq_ft' if 'area' in measure_type else 'ft'
-                                measurements[measure_type] = RoofingMeasurement(
-                                    consolidated['value'],
-                                    unit,
-                                    consolidated['count']
-                                )
+                                measurements['measurements'][measure_type] = consolidated['value']
                 
                 # Extract areas per pitch using block structure
                 areas_per_pitch = self._parse_areas_per_pitch(text, blocks)
@@ -317,9 +328,7 @@ class PDFMeasurementExtractor:
                     logger.info(f"Found areas per pitch: {areas_per_pitch}")
                     for pitch, data in areas_per_pitch.items():
                         pitch_key = f"area_pitch_{pitch.replace('/', '_')}"
-                        measurements[pitch_key] = RoofingMeasurement(data['area'], 'sq_ft')
-                        percentage_key = f"percentage_pitch_{pitch.replace('/', '_')}"
-                        measurements[percentage_key] = RoofingMeasurement(data['percentage'], 'percent')
+                        measurements['areas_per_pitch'][pitch_key] = data
                 else:
                     logger.warning("No areas per pitch found")
                 
@@ -340,9 +349,15 @@ class PDFMeasurementExtractor:
                     logger.warning("No suggested waste found")
                 
                 # Validate total area (required)
-                if 'total_area' not in measurements:
+                if measurements['measurements']['total_area'] is None:
                     logger.error("Required measurement 'total_area' not found")
                     raise ValueError("Total Roof Area measurement is required but not found")
+                
+                # Validate areas per pitch percentages
+                if measurements['areas_per_pitch']:
+                    total_percentage = sum(data['percentage'] for data in measurements['areas_per_pitch'].values())
+                    if not (99.0 <= total_percentage <= 101.0):
+                        logger.warning(f"Areas per pitch percentages sum to {total_percentage}%, expected 100%")
                 
                 # Convert measurements to dictionary format
                 return {
@@ -352,6 +367,61 @@ class PDFMeasurementExtractor:
         
         except Exception as e:
             logger.error(f"Error processing PDF: {str(e)}")
+            raise
+
+    def extract_measurements_from_bytes(self, pdf_bytes: bytes) -> Dict:
+        """
+        Extract measurements from PDF bytes.
+        
+        Args:
+            pdf_bytes (bytes): The PDF content in bytes
+            
+        Returns:
+            Dict: Dictionary containing extracted measurements and areas per pitch
+        """
+        try:
+            # Create a PDF document from bytes
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            
+            # Extract text and blocks
+            text = ""
+            blocks = []
+            for page in doc:
+                text += page.get_text()
+                blocks.extend(page.get_text("blocks"))
+            
+            # Initialize measurements dictionary
+            measurements = {}
+            
+            # Extract each measurement using patterns
+            for measure_type, pattern in self.patterns.items():
+                found = self._find_all_measurements(pattern, text, 1, measure_type)
+                if found:
+                    consolidated = self._consolidate_measurements(found)
+                    if consolidated:
+                        measurements[measure_type] = consolidated
+            
+            # Extract areas per pitch
+            areas_per_pitch = self._parse_areas_per_pitch(text, blocks)
+            
+            # Extract address if available
+            address_match = self.address_pattern.search(text)
+            if address_match:
+                measurements['street_address'] = address_match.group(1).strip()
+                measurements['city'] = address_match.group(2).strip()
+                measurements['state'] = address_match.group(3).strip()
+                measurements['zip_code'] = address_match.group(4).strip()
+            
+            # Close the document
+            doc.close()
+            
+            return {
+                "measurements": measurements,
+                "areas_per_pitch": areas_per_pitch
+            }
+            
+        except Exception as e:
+            logger.error(f"Error extracting measurements from bytes: {str(e)}")
             raise
 
 def create_extractor() -> PDFMeasurementExtractor:

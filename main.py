@@ -1,14 +1,21 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, File
 from fastapi.middleware.cors import CORSMiddleware
 import fitz
 import time
 from datetime import datetime
-from pdf_processor.extractor import create_extractor
+from pdf_processor.extractor import create_extractor, PDFMeasurementExtractor
 from pdf_processor.models import ProcessingResponse
 from pdf_processor.storage import AzureBlobStorage
 from pdf_processor.database import Database
 from pdf_processor.config import get_settings
+from pdf_processor.document_intelligence import DocumentIntelligence
 import os
+import logging
+import traceback
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="EagleView PDF Processor")
@@ -26,6 +33,7 @@ app.add_middleware(
 pdf_extractor = create_extractor()
 azure_storage = AzureBlobStorage()
 db = Database()
+document_intelligence = DocumentIntelligence()
 
 @app.get("/")
 async def root():
@@ -329,71 +337,19 @@ async def process_pdf(
         print(f"Uploading PDF as: {pdf_blob_name}")
         file_url = await azure_storage.upload_pdf(contents, pdf_blob_name)
         
-        # Extract measurements and address
+        # Extract measurements
         print("\nDEBUG: Starting PDF processing")
-        measurements = await pdf_extractor.process_pdf(contents)
+        result = await pdf_extractor.process_pdf(contents)
         
-        # Debug logging for measurements
-        print("\nDEBUG: Raw measurements from PDF:")
-        for key, value in measurements.items():
-            print(f"{key}: {value}")
-        
-        # Format areas per pitch data
-        print("\nDEBUG: Starting areas per pitch formatting")
-        areas_per_pitch = {}
-        for key, value in measurements.items():
-            print(f"Checking key: {key}")
-            if key.startswith('area_pitch_'):
-                pitch = key.replace('area_pitch_', '').replace('_', '/')
-                print(f"Found pitch: {pitch}")
-                percentage_key = f"percentage_pitch_{pitch.replace('/', '_')}"
-                print(f"Looking for percentage with key: {percentage_key}")
-                percentage = measurements.get(percentage_key, {}).get('value', 0)
-                print(f"Found percentage: {percentage}")
-                areas_per_pitch[pitch] = {
-                    'area': value.get('value', 0),
-                    'percentage': percentage
-                }
-                print(f"Added to areas_per_pitch: {pitch} -> {areas_per_pitch[pitch]}")
-        
-        print("\nDEBUG: Final areas_per_pitch:")
-        print(areas_per_pitch)
-        
-        # Create the response in the exact format needed
+        # Create response data
         response_data = {
             "success": True,
             "filename": file.filename,
-            "measurements": {
-                "predominant_pitch": measurements.get("predominant_pitch"),
-                "penetrations_area": measurements.get("penetrations_area"),
-                "penetrations_perimeter": measurements.get("penetrations_perimeter"),
-                "total_area": measurements.get("total_area"),
-                "ridges": measurements.get("ridges"),
-                "valleys": measurements.get("valleys"),
-                "eaves": measurements.get("eaves"),
-                "rakes": measurements.get("rakes"),
-                "hips": measurements.get("hips"),
-                "step_flashing": measurements.get("step_flashing"),
-                "flashing": measurements.get("flashing"),
-                "drip_edge": measurements.get("drip_edge")
-            },
-            "areas_per_pitch": areas_per_pitch,
-            "address_info": {
-                "street_address": measurements.get("street_address"),
-                "city": measurements.get("city"),
-                "state": measurements.get("state"),
-                "zip_code": measurements.get("zip_code")
-            },
-            "total_area": measurements.get("total_area", {}).get("value"),
-            "patterns_used": [
-                "total_area", "predominant_pitch", "ridges", "valleys",
-                "eaves", "rakes", "hips", "step_flashing", "flashing",
-                "penetrations_area", "penetrations_perimeter", "drip_edge"
-            ]
+            "file_url": file_url,
+            "report_id": report_id,
+            "measurements": result["measurements"],
+            "areas_per_pitch": result["areas_per_pitch"]
         }
-        
-        print("\nDEBUG: Final response data:")
-        print(response_data)
         
         # Store the full data for future retrieval
         json_blob_name = f"{report_id}.json"
@@ -403,14 +359,17 @@ async def process_pdf(
         return ProcessingResponse(**response_data)
         
     except Exception as e:
-        print(f"\nDEBUG: Error in process_pdf: {str(e)}")
-        error_response = ProcessingResponse(
+        error_msg = str(e)
+        print(f"Error processing PDF: {error_msg}")
+        return ProcessingResponse(
             success=False,
+            error=error_msg,
             filename=file.filename,
+            file_url="",
+            report_id=report_id or "",
             measurements={},
-            error=str(e)
+            areas_per_pitch={}
         )
-        return error_response
 
 @app.post("/test")
 async def test_pdf(file: UploadFile):
@@ -430,14 +389,13 @@ async def test_pdf(file: UploadFile):
         print("\nDEBUG: Starting PDF measurement extraction")
         result = await pdf_extractor.process_pdf(contents)
         print("\nDEBUG: Measurement extraction complete")
-        print(f"DEBUG: Areas per pitch data: {result.get('areas_per_pitch', {})}")
         
         return {
             "success": True,
             "filename": file.filename,
             "file_url": file_url,
-            "measurements": result,
-            "patterns_used": list(pdf_extractor.patterns.keys())
+            "measurements": result["measurements"],
+            "areas_per_pitch": result["areas_per_pitch"]
         }
     except Exception as e:
         print(f"DEBUG: Error in test_pdf: {str(e)}")
@@ -736,6 +694,92 @@ async def test_storage_connection():
             "status": "failed",
             "error": str(e)
         }
+
+@app.post("/analyze-document")
+async def analyze_document(file: UploadFile):
+    """
+    Analyze a document using Azure Document Intelligence
+    """
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    try:
+        # Read the file content
+        content = await file.read()
+        
+        # Analyze the document
+        result = await document_intelligence.analyze_document(content)
+        
+        # Store the original file in Azure Blob Storage
+        timestamp = int(time.time())
+        blob_name = f"{timestamp}_{file.filename}"
+        await azure_storage.upload_pdf(blob_name, content)
+        
+        # Store the analysis results
+        json_blob_name = f"{timestamp}_analysis.json"
+        await azure_storage.upload_json(json_blob_name, result)
+        
+        return {
+            "success": True,
+            "message": "Document analyzed successfully",
+            "blob_name": blob_name,
+            "analysis": result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze-eagleview")
+async def analyze_eagleview_pdf(file: UploadFile = File(...)):
+    try:
+        # Read file contents
+        contents = await file.read()
+        
+        # Upload PDF to Azure Blob Storage
+        pdf_blob_name = f"eagleview/{file.filename}"
+        file_url = await azure_storage.upload_pdf(contents, pdf_blob_name)
+        
+        try:
+            # Process with Document Intelligence
+            doc_result = await document_intelligence.analyze_document(contents)
+            
+            # Process with PyMuPDF extractor
+            extractor = PDFMeasurementExtractor()
+            measurements = extractor.extract_measurements_from_bytes(contents)
+            
+            # Combine results
+            combined_result = {
+                "success": True,
+                "file_url": file_url,
+                "filename": file.filename,
+                "measurements": measurements,
+                "document_intelligence_results": doc_result
+            }
+            
+            return combined_result
+            
+        except Exception as e:
+            logger.error(f"Error processing document: {str(e)}\n{traceback.format_exc()}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "success": False,
+                    "error": f"Error processing document: {str(e)}",
+                    "file_url": file_url,
+                    "filename": file.filename
+                }
+            )
+            
+    except Exception as e:
+        logger.error(f"Error handling file upload: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": f"Error handling file upload: {str(e)}",
+                "filename": getattr(file, 'filename', 'unknown')
+            }
+        )
 
 # Note: We don't need the if __name__ == "__main__" block anymore
 # as we're using Gunicorn/Uvicorn for deployment 
