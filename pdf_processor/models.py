@@ -18,27 +18,17 @@ class ProcessedMeasurements(BaseModel):
     status: str = "success"
     error: Optional[str] = None
 
-class MeasurementValue(BaseModel):
-    value: float | str
-    page: Optional[int] = None
-    count: Optional[int] = None
-
-class AddressInfo(BaseModel):
+class ProcessingResponse(BaseModel):
+    """API response model that matches Supabase structure."""
+    id: Optional[str] = None  # Supabase will generate this
+    status: str
+    report_id: str
+    file_url: str
+    file_name: str  # Required by Supabase
+    measurements: Dict[str, Any]  # Store all measurements including areas per pitch
+    created_at: Optional[str] = None  # Supabase will set this
+    error: Optional[str] = None
     street_address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
-    zip_code: Optional[str] = None
-
-class AreaPerPitch(BaseModel):
-    area: float
-    percentage: float
-
-class ProcessingResponse(BaseModel):
-    success: bool
-    filename: str
-    measurements: Dict[str, MeasurementValue]
-    areas_per_pitch: Dict[str, AreaPerPitch] = {}
-    address_info: AddressInfo
-    total_area: Optional[float] = None
-    patterns_used: List[str] = []
-    error: Optional[str] = None 
+    zip_code: Optional[str] = None 

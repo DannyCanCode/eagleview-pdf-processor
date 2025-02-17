@@ -1,8 +1,7 @@
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from azure.core.exceptions import ResourceExistsError
 import os
-import json
-from typing import Optional, BinaryIO, Dict, Any
+from typing import Optional, BinaryIO
 from datetime import datetime, timedelta
 from pdf_processor.config import get_settings
 import logging
@@ -14,6 +13,11 @@ class AzureBlobStorage:
         settings = get_settings()
         self.connection_string = settings.azure_storage_connection_string
         self.container_name = settings.azure_storage_container_name
+        
+        # Debug logging
+        logger.info("Connection string length: %d", len(self.connection_string) if self.connection_string else 0)
+        logger.info("Container name: %s", self.container_name)
+        
         self.blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
         self._ensure_container_exists()
 
@@ -44,10 +48,14 @@ class AzureBlobStorage:
             str: The URL of the uploaded file
         """
         try:
+            # Create a unique filename with timestamp
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            blob_name = f"{timestamp}_{filename}"
+            
             # Get the blob client
             blob_client = self.blob_service_client.get_blob_client(
                 container=self.container_name,
-                blob=filename
+                blob=blob_name
             )
             
             # Upload the file
@@ -56,11 +64,11 @@ class AzureBlobStorage:
             # Get the blob URL
             blob_url = blob_client.url
             
-            print(f"Successfully uploaded file {filename}")
+            logger.info(f"Successfully uploaded file {blob_name}")
             return blob_url
             
         except Exception as e:
-            print(f"Error uploading file {filename}: {str(e)}")
+            logger.error(f"Error uploading file {filename}: {str(e)}")
             raise
 
     async def get_pdf(self, blob_name: str) -> Optional[bytes]:
@@ -143,20 +151,19 @@ class AzureBlobStorage:
             logger.error(f"Error generating SAS URL for {blob_name}: {str(e)}")
             return None
 
-    async def store_json_data(self, blob_name: str, data: Dict[str, Any]) -> bool:
+    async def store_json_data(self, blob_name: str, data: dict) -> bool:
         """
         Store JSON data in Azure Blob Storage.
         
         Args:
-            blob_name: The name of the blob
-            data: Dictionary to store as JSON
+            blob_name: The name of the blob to store
+            data: The dictionary data to store as JSON
             
         Returns:
             bool: True if storage was successful, False otherwise
         """
         try:
-            # Convert data to JSON string
-            json_str = json.dumps(data)
+            import json
             
             # Get the blob client
             blob_client = self.blob_service_client.get_blob_client(
@@ -164,16 +171,19 @@ class AzureBlobStorage:
                 blob=blob_name
             )
             
+            # Convert data to JSON string
+            json_str = json.dumps(data, indent=2)
+            
             # Upload the JSON data
             blob_client.upload_blob(json_str, overwrite=True)
-            logger.info(f"Successfully stored JSON data in {blob_name}")
+            logger.info(f"Successfully stored JSON data as {blob_name}")
             return True
             
         except Exception as e:
-            logger.error(f"Error storing JSON data in {blob_name}: {str(e)}")
+            logger.error(f"Error storing JSON data as {blob_name}: {str(e)}")
             return False
 
-    async def get_json_data(self, blob_name: str) -> Optional[Dict[str, Any]]:
+    async def get_json_data(self, blob_name: str) -> Optional[dict]:
         """
         Retrieve JSON data from Azure Blob Storage.
         
@@ -181,9 +191,12 @@ class AzureBlobStorage:
             blob_name: The name of the blob to retrieve
             
         Returns:
-            Optional[Dict[str, Any]]: The JSON data if found, None otherwise
+            Optional[dict]: The JSON data if found and valid, None otherwise
         """
         try:
+            import json
+            
+            # Get the blob client
             blob_client = self.blob_service_client.get_blob_client(
                 container=self.container_name,
                 blob=blob_name
@@ -193,8 +206,9 @@ class AzureBlobStorage:
             blob_data = blob_client.download_blob()
             json_str = await blob_data.content_as_text()
             
-            # Parse JSON
-            return json.loads(json_str)
+            # Parse JSON data
+            data = json.loads(json_str)
+            return data
             
         except Exception as e:
             logger.error(f"Error retrieving JSON data from {blob_name}: {str(e)}")

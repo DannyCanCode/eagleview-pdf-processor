@@ -1,6 +1,10 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Optional
+import logging
+import os
+
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application settings with environment validation."""
@@ -33,7 +37,18 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    return Settings()
+    try:
+        settings = Settings()
+        logger.info("Settings loaded successfully")
+        logger.info("Connection string length: %d", len(settings.azure_storage_connection_string) if settings.azure_storage_connection_string else 0)
+        logger.info("Container name: %s", settings.azure_storage_container_name)
+        return settings
+    except Exception as e:
+        logger.error("Error loading settings: %s", str(e))
+        raise
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Export settings and getter
 __all__ = ['get_settings'] 

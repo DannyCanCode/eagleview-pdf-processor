@@ -118,65 +118,84 @@ class PDFMeasurementExtractor:
         """Parse the Areas per Pitch section from EagleView PDFs."""
         areas_per_pitch = {}
         
-        # First find the section in the text
+        # Use this exact pattern - it's crucial for EagleView format
         section_pattern = r'Areas\s+per\s+Pitch.*?\n(.*?)(?=\n\s*\n|\Z)'
-        section_match = re.search(section_pattern, text, re.DOTALL)
+        section_match = re.search(section_pattern, text, re.DOTALL | re.IGNORECASE)
         
-        if not section_match:
-            logger.warning("Could not find Areas per Pitch section")
-            return areas_per_pitch
+        if section_match:
+            section_text = section_match.group(1)
+            logger.info(f"Found Areas per Pitch section: {section_text}")
             
-        section_text = section_match.group(1)
-        logger.info(f"Found Areas per Pitch section:\n{section_text}")
-        
-        # Split into lines and clean them
-        lines = [line.strip() for line in section_text.split('\n') if line.strip()]
-        logger.info(f"Processing lines: {lines}")
-        
-        current_pitch = None
-        current_area = None
-        
-        for line in lines:
-            logger.info(f"Processing line: {line}")
+            # Split into lines and clean them
+            lines = [line.strip() for line in section_text.split('\n') if line.strip()]
             
-            # First check for pitch (contains '/')
-            if '/' in line:
-                current_pitch = line.strip()
-                logger.info(f"Found pitch: {current_pitch}")
-                continue
+            # Initialize arrays for ordered data
+            pitches = []
+            areas = []
+            percentages = []
             
-            # Then check for percentage (ends with '%')
-            if line.endswith('%'):
-                if current_pitch and current_area is not None:
+            # Process each line in this exact order
+            for line in lines:
+                logger.info(f"Processing line: {line}")
+                
+                # Pattern 1: Pitch lines (must check first)
+                if '/' in line and line.replace('/', '').replace(' ', '').isdigit():
+                    pitches.append(line.strip())
+                    logger.info(f"Found pitch: {line.strip()}")
+                    
+                # Pattern 2: Percentage lines (check second)
+                elif line.endswith('%'):
                     try:
-                        percentage = float(line.rstrip('%'))
-                        areas_per_pitch[current_pitch] = {
-                            'area': current_area,
-                            'percentage': percentage
-                        }
-                        logger.info(f"Added pitch data: {current_pitch} -> area={current_area}, percentage={percentage}%")
-                        current_pitch = None
-                        current_area = None
+                        percentage = float(line.rstrip('%').strip())
+                        percentages.append(percentage)
+                        logger.info(f"Found percentage: {percentage}")
                     except ValueError:
-                        logger.warning(f"Could not parse percentage value: {line}")
-                continue
+                        continue
+                        
+                # Pattern 3: Area lines (check last)
+                else:
+                    try:
+                        area = float(line.replace(',', '').strip())
+                        areas.append(area)
+                        logger.info(f"Found area: {area}")
+                    except ValueError:
+                        continue
             
-            # Finally try as area (numeric)
-            try:
-                current_area = float(line.replace(',', ''))
-                logger.info(f"Found area: {current_area}")
-            except ValueError:
-                logger.warning(f"Could not parse area value: {line}")
+            logger.info(f"Found {len(pitches)} pitches, {len(areas)} areas, {len(percentages)} percentages")
+            
+            # Group in sets of three and validate
+            for i in range(0, min(len(pitches), len(areas), len(percentages)), 3):
+                group_pitches = pitches[i:i+3]
+                group_areas = areas[i:i+3]
+                group_percentages = percentages[i:i+3]
+                
+                # Validate complete groups and percentage sum
+                if (len(group_pitches) == 3 and 
+                    len(group_areas) == 3 and 
+                    len(group_percentages) == 3 and 
+                    abs(sum(group_percentages) - 100) < 1):
+                    
+                    # Create entries for each pitch in the group
+                    for j in range(3):
+                        pitch = group_pitches[j]
+                        areas_per_pitch[pitch] = {
+                            'area': group_areas[j],
+                            'percentage': group_percentages[j]
+                        }
+                        logger.info(f"Added pitch data: {pitch} -> {areas_per_pitch[pitch]}")
+                else:
+                    logger.warning(f"Invalid group at index {i}: Pitches={group_pitches}, Areas={group_areas}, Percentages={group_percentages}")
+        else:
+            logger.warning("Could not find Areas per Pitch section")
         
-        # Validate total percentage
+        # Validate total percentage if we found any data
         if areas_per_pitch:
             total_percentage = sum(data['percentage'] for data in areas_per_pitch.values())
             total_area = sum(data['area'] for data in areas_per_pitch.values())
             logger.info(f"Total percentage: {total_percentage}%")
             logger.info(f"Total area: {total_area}")
-            
             if not (99.0 <= total_percentage <= 101.0):
-                logger.warning(f"Total percentage {total_percentage}% is not approximately 100%")
+                logger.warning(f"Total percentage {total_percentage}% is not 100%")
         
         logger.info(f"Final areas_per_pitch data: {areas_per_pitch}")
         return areas_per_pitch
